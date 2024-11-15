@@ -14,7 +14,7 @@ exports.calculateAudience = asyncHandler(async (req, res, next) => {
     const filteredCustomers = customers.filter((customer) => {
         // Apply the conditions to each customer (simple example)
         return conditions.every(condition => {
-            if(conditionType == "and"){
+            if (conditionType == "and") {
                 if (condition.field === 'totalSpending' && condition.operator === '>') {
                     return customer.totalAmountSpent > condition.value;
                 }
@@ -30,7 +30,7 @@ exports.calculateAudience = asyncHandler(async (req, res, next) => {
                 return true;
             }
 
-            if(conditionType =='or'){
+            if (conditionType == 'or') {
                 if (condition.field === 'totalSpending' || condition.operator === '>') {
                     return customer.totalAmountSpent > condition.value;
                 }
@@ -45,7 +45,7 @@ exports.calculateAudience = asyncHandler(async (req, res, next) => {
                 }
                 return true;
             }
-            
+
         });
     }).map((user) => user._id);
 
@@ -78,19 +78,8 @@ exports.communicationCreate = asyncHandler(async (req, res, next) => {
     res.status(200).json({ success: true, message: 'Communication created Successfully' });
 });
 
-const updateDeliveryStatus = (logId) => {
-    const status = Math.random() < 0.9 ? 'SENT' : 'FAILED'; // 90% SENT, 10% FAILED
-
-    const logEntry = Communication.findById(logId);
-    if (logEntry) {
-        logEntry.deliveryStatus = status;
-        Communication.findByIdAndUpdate(logId, logEntry);
-
-    }
-};
-
-const sendPersonalizedMessage = (customerId, message, communicationId) => {
-    const customer = Customer.findById(customerId);
+const sendPersonalizedMessage = async (customerId, message, communicationId, status) => {
+    const customer = await Customer.findById(customerId);
     if (!customer) return null;
 
     // Replace [Name] placeholder in message
@@ -98,16 +87,11 @@ const sendPersonalizedMessage = (customerId, message, communicationId) => {
     // Create a new log entry in communications log
     const logEntry = {
         message: personalizedMessage,
-        deliveryStatus: 'pending', // Initial status
+        deliveryStatus: status, // Initial status
     };
-
     // Add log entry to communications log
-    Communication.findByIdAndUpdate(communicationId, logEntry);
-
-    // Trigger delivery receipt to update status
-    setTimeout(() => {
-        updateDeliveryStatus(communicationId);
-    }, 1000);
+    await Communication.findByIdAndUpdate(communicationId, logEntry);
+    await Customer.findByIdAndUpdate(customerId, { messageStatus: status });
 
     return logEntry;
 };
@@ -120,9 +104,19 @@ exports.sendTextMessage = asyncHandler(async (req, res, next) => {
 
     let communicationRes = await Communication.findOne({ audienceSegmentId: audienceSegmentId });
     let allUsers = communicationRes?.users;
-    console.log("all users ::  ", allUsers);
+    const totalItems = allUsers.length;
+    const sentCount = Math.floor(totalItems * 0.9); // Calculate 90%
 
-    const logEntries = allUsers.map((customerId) => sendPersonalizedMessage(customerId, message, communicationRes._id));
+    // Shuffle the array to randomize
+    allUsers = [...allUsers].sort(() => Math.random() - 0.5);
+    const logEntries = allUsers.map(async (customerId, index) => {
+        if (index < sentCount) {
+            await sendPersonalizedMessage(customerId, message, communicationRes._id, "sent")
+        }
+        else {
+            await sendPersonalizedMessage(customerId, message, communicationRes._id, "pending")
+        }
+    });
 
     res.status(200).json({
         success: true, message: 'Messages sent to target audience',
