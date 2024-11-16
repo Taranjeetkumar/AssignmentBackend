@@ -14,7 +14,7 @@ exports.calculateAudience = asyncHandler(async (req, res, next) => {
     const filteredCustomers = customers.filter((customer) => {
         // Apply the conditions to each customer (simple example)
         return conditions.every(condition => {
-            if (conditionType == "and") {
+            if (condition?.conditionType == "and") {
                 if (condition.field === 'totalSpending' && condition.operator === '>') {
                     return customer.totalAmountSpent > condition.value;
                 }
@@ -30,7 +30,7 @@ exports.calculateAudience = asyncHandler(async (req, res, next) => {
                 return true;
             }
 
-            if (conditionType == 'or') {
+            if (condition?.conditionType == 'or') {
                 if (condition.field === 'totalSpending' || condition.operator === '>') {
                     return customer.totalAmountSpent > condition.value;
                 }
